@@ -139,25 +139,31 @@
 - `baseEntryFee` - uint256: Base fee in KINGS tokens (100 KINGS)
 - `prizePool` - uint256: Accumulated entry fees for current round
 - `kingsToken` - address: KINGS ERC20 token contract
-- `admin` - address: Trusted backend address for verified submissions
+- `admin` - address: Trusted backend address for verified submissions (Single EOA)
 - `solvers` - mapping of addresses to solve times for current round
+- `puzzles` - uint8[64][100]: 100 pre-generated puzzles stored on-chain (one byte per cell, values 0-7 for region)
+- `puzzleCount` - uint256: Total number of puzzles (fixed at 100)
 
 **Core Functions:**
 - `payToPlay()` - Transfer current entry fee, receive puzzle access
-- `submitResult(address player, uint256 solveTimeMs)` - Admin-only, record verified result
-- `distributePrizes()` - Internal, called when player threshold reached
+- `submitResult(address player, uint256 solveTimeMs)` - Admin-only, record verified result (minimum 10 seconds enforced)
+- `distributePrizes()` - Internal, called when player threshold reached. Contract pays gas (requires ETH funding). Last solver receives rounding dust.
+- `refundAllPlayers()` - Internal, called when round ends with zero successful solvers
+- `emergencyRefund()` - Admin-only, refunds all entry fees if round is stuck (no automatic timeout)
 - `getEntryFee()` - View: returns `baseEntryFee * currentRound`
 - `getPlayersNeeded()` - View: returns `currentRound * 2` (2, 4, 6, 8...)
 - `getPlayersRemaining()` - View: returns `getPlayersNeeded() - playCount`
-- `rotatePuzzle()` - Internal, advance to next puzzle
+- `rotatePuzzle()` - Internal, advance to next puzzle (cycles through 100 puzzles)
 - `getLeaderboard()` - View current round solvers and times
-- `getPuzzle(uint256 puzzleId)` - View puzzle configuration (regions)
+- `getPuzzle(uint256 puzzleId)` - View puzzle configuration (returns uint8[64] region assignments)
 - `getRoundInfo()` - View: current round, entry fee, players needed, play count, prize pool
 
 **Events:**
 - `GameStarted(address player, uint256 puzzleId)`
 - `ResultSubmitted(address player, uint256 solveTimeMs)`
 - `PrizesDistributed(uint256 roundId, address[] winners, uint256[] amounts)`
+- `PlayersRefunded(uint256 roundId, uint256 totalRefunded)`
+- `EmergencyRefund(uint256 roundId, address triggeredBy)`
 - `PuzzleRotated(uint256 newPuzzleId)`
 - `RoundStarted(uint256 roundId, uint256 playersNeeded)`
 
@@ -215,9 +221,9 @@ contract MockKINGS is ERC20 {
 
 ### Anti-Cheat Measures
 - Players cannot self-report times or solutions
-- Only trusted admin can submit verified results to contract
+- Only trusted admin (single EOA) can submit verified results to contract
 - Backend validates solution correctness before submitting
-- Minimum solve time threshold (e.g., 5 seconds) to catch bots
+- Minimum solve time threshold of 10 seconds to catch bots
 - Client-side timer backed by server-side verification
 
 ---
@@ -232,9 +238,10 @@ Each puzzle must have:
 4. Regions are contiguous (all cells in a region are connected)
 
 ### Puzzle Storage
-- Puzzles stored as region assignments (64 values, one per cell)
-- Pre-generated set of puzzles stored in contract or IPFS
-- Rotating through puzzle set prevents memorization
+- 100 puzzles stored on-chain as `uint8[64]` arrays (one byte per cell, values 0-7 for region)
+- Puzzles are pre-generated and fixed at contract deployment
+- Game cycles through all 100 puzzles sequentially, then repeats
+- No mechanism to add more puzzles after deployment
 
 ---
 
@@ -329,3 +336,17 @@ Fastest solvers get the largest shares of the pool.
 - Wagmi/Viem for wallet interactions
 - Base network RPC
 - Redis for caching (existing Upstash setup)
+
+---
+
+## Edge Cases & Operational Details
+
+| Scenario | Behavior |
+|----------|----------|
+| **Zero solvers in a round** | All players' entry fees are refunded via `refundAllPlayers()` |
+| **Stuck round (not enough players)** | Admin can call `emergencyRefund()` to refund all entry fees. No automatic timeout. |
+| **Prize distribution gas** | Contract pays gas (must hold ETH). Deployment should fund contract with ETH. |
+| **Rounding dust from prize math** | Last solver in the distribution receives any remainder wei |
+| **Minimum solve time** | 10 seconds enforced by backend. Submissions under 10s are rejected as suspicious. |
+| **Puzzle cycling** | After puzzle 100, returns to puzzle 1. Puzzles are fixed at deployment. |
+| **Non-solvers' entry fees** | Included in prize pool for successful solvers. Non-solvers lose their stake. |
