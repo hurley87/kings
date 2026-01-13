@@ -60,10 +60,7 @@ Replace `YOUR_CLOUDFLARE_URL` with the tunnel URL from step 6 (e.g., `https://xx
 Now that the starter app is running, define what you want to build:
 1. Open `ralph/PRD.md`
 2. Write your product requirements with user stories and acceptance criteria
-3. Use Claude plan mode to generate an implementation plan:
-   ```
-   /blueprint [describe your feature]
-   ```
+3. Run `/blueprint` to generate an implementation plan from the PRD
 4. Run `pnpm run ralph` to start the autonomous development loop
 
 See the README for more details on the Ralph workflow.

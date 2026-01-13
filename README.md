@@ -48,9 +48,9 @@ Ralph is an autonomous coding agent powered by Claude. It uses a two-phase plann
    - Technical constraints
    - Out of scope items
 
-2. **Generate a Plan**: Use the `/blueprint` slash command in Claude Code to create an implementation plan from the PRD.
+2. **Generate a Plan**: Run the `/blueprint` command to create an implementation plan from the PRD.
    ```bash
-   /blueprint Add a voting contract with a frontend UI
+   /blueprint
    ```
    This creates a story-based task checklist in `ralph/IMPLEMENTATION_PLAN.md`.
 
